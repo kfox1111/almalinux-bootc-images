@@ -1,0 +1,207 @@
+name: "Build and No Push"
+
+inputs:
+  VERSION_MAJOR:
+    required: true
+  DATE_STAMP:
+    required: true
+  IMAGE_REGISTRY:
+    required: true
+  SPECIALIZATION:
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Prepare environment
+      shell: bash
+      run: |
+        echo "VARIANT=--platform ${{ env.PLATFORM }}" >> "$GITHUB_ENV"
+
+        # quay.io/almalinuxorg/almalinux-bootc
+        IMAGE_DEST=${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+        echo "IMAGE_DEST=${IMAGE_DEST}" >> "$GITHUB_ENV"
+
+        ARCH=${{ matrix.ARCH }}
+        echo "CLEAN_ARCH=${ARCH//\//_}" >> "$GITHUB_ENV"
+
+    #- name: Log in to registry
+    #  shell: bash
+    #  run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
+
+    - name: Check update
+      shell: bash
+      run: |
+        # 'dnf check-update'
+        # exit codes:
+        #   0 - no updates
+        #   100 - updates available
+        #   125 - tag/platform not found
+        #   127 - command not found
+        res=100
+        echo "res=${res}" >> "$GITHUB_ENV"
+        echo "Exit code: '$res'"
+
+    - name: Get info
+      id: info
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      run: |
+        INFO=$(sudo podman run ${{ env.VARIANT }} --quiet --rm quay.io/almalinuxorg/${{ inputs.VERSION_MAJOR }}-base bash -c "dnf upgrade -y almalinux-release && rpm -q almalinux-gpg-keys && cat /etc/os-release" || true)
+        echo "$INFO"
+
+        echo "id=$(echo "$INFO" | grep "^ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
+        echo "version-id=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
+        echo "long-version=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"').${{ inputs.DATE_STAMP }}.0" >> $GITHUB_OUTPUT
+
+    - name: Build image
+      id: build
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      run: |
+        BUILD_TIME=$(date -Iseconds)
+
+        # define a multiline variable with heredoc
+        LABELS=$(cat <<EOF
+        redhat.id=${{ steps.info.outputs.id }}
+        redhat.version-id=${{ steps.info.outputs.version-id }}
+        version=${{ steps.info.outputs.version-id }}
+        release=${{ steps.info.outputs.version-id }}
+        build-date=${BUILD_TIME}
+        org.opencontainers.image.created=${BUILD_TIME}
+        org.opencontainers.image.version=${{ steps.info.outputs.long-version }}
+        org.opencontainers.image.source=${{ github.repositoryUrl }}
+        org.opencontainers.image.title=${{ env.IMAGE_NAME }}
+        org.opencontainers.image.url=${{ github.event.repository.html_url }}
+        EOF
+        )
+
+        while IFS= read -r label; do
+          ALL_LABELS="$ALL_LABELS --label=\"$label\" --annotation=\"$label\""
+        done <<< "$LABELS"
+
+        make image \
+          PLATFORM=${{ env.PLATFORM }} \
+          LABELS="${ALL_LABELS}" \
+          IMAGE_NAME=${{ env.IMAGE_NAME }} \
+          VERSION_MAJOR=${{ inputs.VERSION_MAJOR }} \
+          SPECIALIZATION=${{ inputs.SPECIALIZATION }} \
+
+        echo "image-id=$(cat /tmp/image-id)" >> $GITHUB_OUTPUT
+
+    - name: rechunk image
+      id: rechunk
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      run: |
+        make rechunk \
+          PLATFORM=${{ env.PLATFORM }} \
+          IMAGE_NAME=${{ env.IMAGE_NAME }}
+
+        echo "image-id=sha256:$(sudo podman image inspect ${{ env.IMAGE_NAME }} -f "{{.Id}}")" >> $GITHUB_OUTPUT
+
+    - name: Run Image
+      id: run
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      env:
+        IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
+      run: |
+        sudo podman run ${{ env.VARIANT }} --rm -ti ${{ env.IMAGE_ID }} bootc --version
+
+        INFO=$(sudo podman run ${{ env.VARIANT }} --rm ${{ env.IMAGE_ID }} bash -c "rpm -q almalinux-gpg-keys && cat /etc/os-release")
+        echo "$INFO"
+
+        echo "id=$(echo "$INFO" | grep "^ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
+        echo "version-id=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
+        echo "long-version=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"').${{ inputs.DATE_STAMP }}.0" >> $GITHUB_OUTPUT
+        echo "vendor=$(echo "$INFO" | grep "^VENDOR_NAME=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
+
+    - name: Generate Suffix
+      id: suffix
+      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      shell: bash
+      run: |
+        if [ 'x${{ inputs.SPECIALIZATION }}' == 'xgeneral' ]; then
+          echo "suffix=" >> $GITHUB_OUTPUT
+        else
+          echo "suffix=-${{ inputs.SPECIALIZATION }}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Build image tarball
+      shell: bash
+      env:
+        IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
+        SUFFIX: ${{ steps.suffix.outputs.suffix }}
+      run: |
+        # Tag: VERSION_MAJOR.VERSION_MINOR-DATE_STAMP-ARCH
+        sudo podman tag \
+          ${{ env.IMAGE_ID }} \
+          ${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && \
+        sudo podman tag \
+          ${{ env.IMAGE_ID }} \
+          localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && \
+        sudo podman save \
+          ${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} > \
+          /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar && \
+        sudo gzip /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar
+
+    - name: Build os image
+      if: inputs.SPECIALIZATION == 'rpi'
+      shell: bash
+      env:
+        IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
+        SUFFIX: ${{ steps.suffix.outputs.suffix }}
+      run: |
+        mkdir -p output && \
+        sudo podman run \
+           --rm \
+           -i \
+           --privileged \
+           --security-opt label=type:unconfined_t \
+           -v $(pwd)/output:/output \
+           -v /var/lib/containers/storage:/var/lib/containers/storage \
+           quay.io/centos-bootc/bootc-image-builder:latest \
+           --type raw \
+           --rootfs xfs \
+           --local \
+           localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && \
+           ls -l output/image && \
+        sudo cp output/image/disk.raw /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw && \
+        sudo mv output/image/disk.raw /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw && \
+        mkdir -p /tmp/mnt && \
+        LOOP=$(sudo losetup -f --show -P /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw) && \
+        sudo mount ${LOOP}p1 /tmp/mnt && \
+        cd /tmp && \
+        curl -L -O https://github.com/worproject/rpi5-uefi/releases/download/v0.3/RPi5_UEFI_Release_v0.3.zip && \
+        sudo /bin/bash -c "cd mnt && unzip ../RPi5_UEFI_Release_v0.3.zip" && \
+        sudo podman run \
+          --rm \
+          -i \
+          -v /tmp/mnt:/tmp \
+          --entrypoint /bin/bash \
+          localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} \
+          -c "cp /usr/share/raspberrypi2-kernel*/*/boot/bcm2712-rpi-5-b.dtb /tmp/bcm2712-rpi-5-b.dtb" && \
+        sudo umount /tmp/mnt && \
+        sudo gzip /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw
+        sudo gzip /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw
+
+    - uses: actions/upload-artifact@v4
+      env:
+        SUFFIX: ${{ steps.suffix.outputs.suffix }}
+      with:
+        name: image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar.gz
+        path: /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar.gz
+    - uses: actions/upload-artifact@v4
+      if: inputs.SPECIALIZATION == 'rpi'
+      env:
+        SUFFIX: ${{ steps.suffix.outputs.suffix }}
+      with:
+        name: image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw.gz
+        path: /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw.gz
+    - uses: actions/upload-artifact@v4
+      if: inputs.SPECIALIZATION == 'rpi'
+      env:
+        SUFFIX: ${{ steps.suffix.outputs.suffix }}
+      with:
+        name: image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw.gz
+        path: /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw.gz
