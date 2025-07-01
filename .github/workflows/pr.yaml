@@ -66,6 +66,14 @@ jobs:
       with:
         submodules: true
 
+      - name: Get a newer podman (from debian testing)
+        if: ${{ env.skip != 1 }}
+        run: |
+          set -eux
+          echo 'deb [trusted=yes] https://ftp.debian.org/debian/ testing main' | sudo tee /etc/apt/sources.list.d/testing.list
+          sudo apt update
+          sudo apt install -y crun/testing podman/testing
+
     - uses: ./.github/actions/shared-steps-no-push
       name: Build and No Push (${{ env.VERSION_MAJOR }} - ${{ matrix.SPECIALIZATION }})
       with:
