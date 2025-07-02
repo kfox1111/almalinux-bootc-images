@@ -177,10 +177,10 @@ runs:
         sudo podman run \
           --rm \
           -i \
-          -v /tmp/mnt:/mnt \
+          -v /tmp/mnt:/tmp \
           --entrypoint /bin/bash \
           localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} \
-          -c "cp /usr/share/raspberrypi2-kernel*/*/boot/bcm2712-rpi-5-b.dtb /mnt" && \
+          -c "cp /usr/share/raspberrypi2-kernel*/*/boot/bcm2712-rpi-5-b.dtb /tmp/bcm2712-rpi-5-b.dtb" && \
         sudo umount /tmp/mnt && \
         sudo gzip /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw
         sudo gzip /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw
