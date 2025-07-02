@@ -169,7 +169,7 @@ runs:
         sudo cp output/image/disk.raw /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw && \
         sudo mv output/image/disk.raw /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw && \
         mkdir -p /tmp/mnt && \
-        LOOP=$(sudo losetup -f --show -P image-almalinux-bootc-9-rpi-20250702-arm64.raw) && \
+        LOOP=$(sudo losetup -f --show -P /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw) && \
         sudo mount ${LOOP}p1 /tmp/mnt && \
         cd /tmp && \
         curl -L -O https://github.com/worproject/rpi5-uefi/releases/download/v0.3/RPi5_UEFI_Release_v0.3.zip && \
