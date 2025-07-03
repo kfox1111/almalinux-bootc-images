@@ -42,6 +42,7 @@ runs:
         fi
 
     - name: Log in to registry
+      if: github.event_name != 'pull_request'
       shell: bash
       run: sudo podman login ${{ inputs.IMAGE_REGISTRY }} -u ${{ inputs.REGISTRY_USER }} -p ${{ inputs.REGISTRY_PASSWORD }}
 
@@ -57,6 +58,9 @@ runs:
         #   125 - tag/platform not found
         #   127 - command not found
         res=0
+        if [ "${{ github.event_name }}" != "pull_request" ]; then
+          exit 100
+        fi
         sudo podman run ${{ env.VARIANT }} --quiet --rm ${{ inputs.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.SUFFIX }} dnf check-update || res=$?
         echo "res=${res}" >> "$GITHUB_ENV"
         echo "Exit code: '$res'"
@@ -119,6 +123,21 @@ runs:
 
         echo "image-id=sha256:$(sudo podman image inspect ${{ env.IMAGE_NAME }} -f "{{.Id}}")" >> $GITHUB_OUTPUT
 
+    - name: Build Image Tars
+      id: run
+      if: github.event_name == 'pull_request'
+      shell: bash
+      env:
+        IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
+      run: |
+        sudo podman tag \
+          ${{ env.IMAGE_ID }} \
+          localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && \
+        sudo podman save \
+          ${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} > \
+          /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar && \
+        sudo gzip /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar
+
     - name: Run Image
       id: run
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
@@ -151,7 +170,7 @@ runs:
 
     - name: Push to registry
       id: push
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
+      if: ${{ (env.res != 0 || github.event_name == 'workflow_dispatch') && github.event_name != 'pull_request' }}
       env:
         IMAGE_ID: ${{ steps.rechunk.outputs.image-id }}
         VERSION: ${{ steps.run.outputs.version-id }}
@@ -187,6 +206,17 @@ runs:
           > /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}${{ env.CLEAN_SUFFIX }}_${{ env.CLEAN_ARCH }}.json
 
         cat /tmp/outputs/digests/${{ env.IMAGE_NAME }}_${{ matrix.VERSION_MAJOR }}${{ env.CLEAN_SUFFIX }}_${{ env.CLEAN_ARCH }}.json
+
+    - name: Upload Container Image Artifacts
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      if: ${{ github.event_name == 'pull_request' }}
+      env:
+        SUFFIX: ${{ steps.suffix.outputs.suffix }}
+      with:
+        name: image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar.gz
+        path: /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.tar.gz
+        retention-days: 1
+        if-no-files-found: error
 
     - name: Upload Output Artifacts
       if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
