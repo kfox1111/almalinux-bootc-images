@@ -155,19 +155,6 @@ runs:
         echo "long-version=$(echo "$INFO" | grep "^VERSION_ID=" | cut -d'=' -f2 | tr -d '"').${{ inputs.DATE_STAMP }}.0" >> $GITHUB_OUTPUT
         echo "vendor=$(echo "$INFO" | grep "^VENDOR_NAME=" | cut -d'=' -f2 | tr -d '"')" >> $GITHUB_OUTPUT
 
-    - name: Generate Suffix
-      id: suffix
-      if: ${{ env.res != 0 || github.event_name == 'workflow_dispatch' }}
-      shell: bash
-      run: |
-        if [ 'x${{ inputs.SPECIALIZATION }}' == 'xgeneral' ]; then
-          echo "suffix=" >> $GITHUB_OUTPUT
-          echo "clean_suffix=" >> $GITHUB_OUTPUT
-        else
-          echo "suffix=-${{ inputs.SPECIALIZATION }}" >> $GITHUB_OUTPUT
-          echo "clean_suffix=_${{ inputs.SPECIALIZATION }}" >> $GITHUB_OUTPUT
-        fi
-
     - name: Push to registry
       id: push
       if: ${{ (env.res != 0 || github.event_name == 'workflow_dispatch') && github.event_name != 'pull_request' }}
