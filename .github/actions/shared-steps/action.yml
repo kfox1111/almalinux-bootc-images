@@ -124,7 +124,7 @@ runs:
         echo "image-id=sha256:$(sudo podman image inspect ${{ env.IMAGE_NAME }} -f "{{.Id}}")" >> $GITHUB_OUTPUT
 
     - name: Build Image Tars
-      id: run
+      id: tars
       if: github.event_name == 'pull_request'
       shell: bash
       env:
