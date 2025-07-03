@@ -40,6 +40,9 @@ jobs:
         run: |
           # Format json for versions matrix
           case ${{ github.event_name }} in
+            pull_request)
+              echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
+              ;;
             workflow_dispatch)
               if [[ "${{ inputs.RELEASE }}" == "ALL" ]]; then
                 echo "matrix=$(jq -c <<< '[${{ env.VERSIONS_LIST }}]')" >> $GITHUB_OUTPUT
