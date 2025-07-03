@@ -1,5 +1,7 @@
 name: Build amd64 and arm64
 on:
+  pull_request:
+    types: [synchronize, opened, reopened]
   workflow_dispatch:
     inputs:
       RELEASE:
