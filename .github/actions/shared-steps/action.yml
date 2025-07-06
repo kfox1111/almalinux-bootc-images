@@ -147,9 +147,9 @@ runs:
       run: |
         mkdir -p output && \
         sudo podman build \
-           -t localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-base-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} \
-           -f ${{ inputs.VERSION_MAJOR }}-rpi/base-image/Dockerfile \
-           ${{ inputs.VERSION_MAJOR }}-rpi/base-image && \
+           -t localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-bootstrap-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} \
+           -f ${{ inputs.VERSION_MAJOR }}-rpi/bootstrap-image/Dockerfile \
+           ${{ inputs.VERSION_MAJOR }}-rpi/bootstrap-image && \
         sudo podman run \
            --rm \
            -i \
@@ -161,7 +161,7 @@ runs:
            --type raw \
            --rootfs xfs \
            --local \
-           localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-base-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && \
+           localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-bootstrap-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && \
            ls -l output/image && \
         sudo cp output/image/disk.raw /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw && \
         sudo mv output/image/disk.raw /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw && \
