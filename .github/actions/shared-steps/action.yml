@@ -149,7 +149,7 @@ runs:
         sudo podman build \
            -t localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-bootstrap-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} \
            -f ${{ inputs.VERSION_MAJOR }}-rpi/bootstrap-image/Dockerfile \
-           --boot-arg=BASE=localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-bootstrap-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} \
+           --build-arg=BASE=localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-bootstrap-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} \
            ${{ inputs.VERSION_MAJOR }}-rpi/bootstrap-image && \
         sudo podman run \
            --rm \
