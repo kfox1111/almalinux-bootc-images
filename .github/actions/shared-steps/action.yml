@@ -162,15 +162,15 @@ runs:
            --rootfs xfs \
            --local \
            localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-bootstrap-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && \
-           ls -l output/image && \
+        ls -l output/image && \
         sudo cp output/image/disk.raw /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw && \
         sudo mv output/image/disk.raw /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw && \
         mkdir -p /tmp/mnt && \
         LOOP=$(sudo losetup -f --show -P /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw) && \
-        fatlabel ${LOOP}p1 "CIDATA" && \
+        sudo fatlabel ${LOOP}p1 "CIDATA" && \
         sudo mount ${LOOP}p1 /tmp/mnt && \
         cd /tmp && \
-        touch /tmp/mnt && \
+        sudo touch /tmp/mnt/meta-data && \
         sudo cp $(pwd)/${{ inputs.VERSION_MAJOR }}/bootstrap-image/user-data /tmp/mnt/ && \
         sudo cp $(pwd)/${{ inputs.VERSION_MAJOR }}/bootstrap-image/README.txt /tmp/mnt/ && \
         curl -L -O https://github.com/worproject/rpi5-uefi/releases/download/v0.3/RPi5_UEFI_Release_v0.3.zip && \
