@@ -170,8 +170,8 @@ runs:
         sudo fatlabel ${LOOP}p1 "CIDATA" && \
         sudo mount ${LOOP}p1 /tmp/mnt && \
         sudo touch /tmp/mnt/meta-data && \
-        sudo cp $(pwd)/${{ inputs.VERSION_MAJOR }}/bootstrap-image/user-data /tmp/mnt/ && \
-        sudo cp $(pwd)/${{ inputs.VERSION_MAJOR }}/bootstrap-image/README.txt /tmp/mnt/ && \
+        sudo cp $(pwd)/${{ inputs.VERSION_MAJOR }}-rpi/bootstrap-image/user-data /tmp/mnt/ && \
+        sudo cp $(pwd)/${{ inputs.VERSION_MAJOR }}-rpi/bootstrap-image/README.txt /tmp/mnt/ && \
         cd /tmp && \
         curl -L -O https://github.com/worproject/rpi5-uefi/releases/download/v0.3/RPi5_UEFI_Release_v0.3.zip && \
         sudo /bin/bash -c "cd mnt && unzip ../RPi5_UEFI_Release_v0.3.zip" && \
