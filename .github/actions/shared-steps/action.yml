@@ -146,6 +146,10 @@ runs:
         SUFFIX: ${{ steps.suffix.outputs.suffix }}
       run: |
         mkdir -p output && \
+        sudo podman build \
+           -t localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-base-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} \
+           -f ${{ inputs.VERSION_MAJOR }}-rpi/base-image/Dockerfile \
+           ${{ inputs.VERSION_MAJOR }}-rpi/base-image/Dockerfile && \
         sudo podman run \
            --rm \
            -i \
@@ -157,14 +161,18 @@ runs:
            --type raw \
            --rootfs xfs \
            --local \
-           localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && \
+           localhost/${{ env.IMAGE_NAME }}:${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-base-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }} && \
            ls -l output/image && \
         sudo cp output/image/disk.raw /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw && \
         sudo mv output/image/disk.raw /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw && \
         mkdir -p /tmp/mnt && \
         LOOP=$(sudo losetup -f --show -P /tmp/image-${{ env.IMAGE_NAME }}-${{ inputs.VERSION_MAJOR }}${{ env.VERSION_MINOR }}${{ env.SUFFIX}}5-${{ inputs.DATE_STAMP }}-${{ env.CLEAN_ARCH }}.raw) && \
+        fatlabel ${LOOP}p1 "CIDATA" && \
         sudo mount ${LOOP}p1 /tmp/mnt && \
         cd /tmp && \
+        touch /tmp/mnt && \
+        sudo cp $(pwd)/${{ inputs.VERSION_MAJOR }}/bootstrap-image/user-data /tmp/mnt/ && \
+        sudo cp $(pwd)/${{ inputs.VERSION_MAJOR }}/bootstrap-image/README.txt /tmp/mnt/ && \
         curl -L -O https://github.com/worproject/rpi5-uefi/releases/download/v0.3/RPi5_UEFI_Release_v0.3.zip && \
         sudo /bin/bash -c "cd mnt && unzip ../RPi5_UEFI_Release_v0.3.zip" && \
         sudo podman run \
